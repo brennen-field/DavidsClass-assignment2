@@ -20,7 +20,15 @@ TEXT_EMBED_MODEL = os.getenv(
     "nvidia/Nemotron-3-Embed-1B-BF16",
 )
 VISUAL_EMBED_URL = os.getenv("VISUAL_EMBED_URL", "")
+VISUAL_EMBED_MODEL = os.getenv(
+    "VISUAL_EMBED_MODEL",
+    "Qwen/Qwen3-VL-Embedding-2B",
+)
 RERANK_URL = os.getenv("RERANK_URL", "")
+RERANK_MODEL = os.getenv(
+    "RERANK_MODEL",
+    "Qwen/Qwen3-VL-Reranker-2B",
+)
 PARSE_URL = os.getenv("PARSE_URL", "")
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
