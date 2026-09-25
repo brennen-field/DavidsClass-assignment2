@@ -27,6 +27,9 @@ The text-embedding client reads the class credential only from
 
 Run tests with `pytest`.
 
+Pull requests also run the full mocked test suite through GitHub Actions; no
+class API key is provided to or required by CI.
+
 ## Project layout
 
 | Folder | Owner | Part |

@@ -9,9 +9,11 @@ from course_assistant.text_search.embedding import (
 from course_assistant.text_search.integration import connect_document_store
 from course_assistant.text_search.keyword import KeywordIndex
 from course_assistant.text_search.models import SearchResult, TextChunk
+from course_assistant.text_search.persistent import ChromaSemanticIndex
 
 __all__ = [
     "KeywordIndex",
+    "ChromaSemanticIndex",
     "EmbeddingServiceError",
     "SearchResult",
     "SemanticIndex",

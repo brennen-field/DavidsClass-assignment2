@@ -40,6 +40,13 @@ by keyword search. It validates the service response before replacing an
 existing document, so a temporary model outage does not erase a working index.
 Its cosine-similarity results use the same `SearchResult` contract as BM25.
 
+For the application, use `ChromaSemanticIndex.from_environment()`. It reads the
+local endpoint settings and stores vectors under `DATA_DIR/text_vectors`. It
+has the same indexing, deletion, and search methods while persisting vectors
+across application restarts. The in-memory `SemanticIndex` remains useful for
+small tests. Call `close()` when the app shuts down (or use the persistent
+index as a context manager) to release local database files.
+
 ## Document-store hooks
 
 Call `connect_document_store(store, index)` for each text index. It registers:
