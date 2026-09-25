@@ -9,12 +9,16 @@ for both text and images, and embeds images as inline base64 data URLs.
 from __future__ import annotations
 
 import base64
+import hashlib
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Protocol
 
 import requests
+
+from course_assistant.text_search.models import PageLike
+from course_assistant.visual_search.models import VisualHit, VisualPage
 
 DEFAULT_VISUAL_EMBED_MODEL = "Qwen/Qwen3-VL-Embedding-2B"
 DEFAULT_TIMEOUT_SECONDS = 120.0
@@ -225,3 +229,118 @@ def _validate_vector_dimensions(vectors: Sequence[Sequence[float]]) -> None:
         raise VisualEmbeddingServiceError(
             "The visual-embedding service returned a non-finite vector value"
         )
+
+
+class VisualEmbedder(Protocol):
+    """The subset of the client used by visual indexes (supports fakes)."""
+
+    def embed_images(self, image_paths: Sequence[str | Path]) -> list[tuple[float, ...]]: ...
+
+    def embed_text(self, text: str) -> tuple[float, ...]: ...
+
+
+class VisualIndex:
+    """An in-memory index over page/slide image vectors.
+
+    One vector per page (not per text chunk): the visual index owns retrieval
+    for slides whose ``text`` is empty, and provides image-level evidence that
+    the combine-and-rerank stage maps back onto text chunks by ``doc_id`` +
+    ``page_number``.
+    """
+
+    def __init__(self, embedder: VisualEmbedder) -> None:
+        self.embedder = embedder
+        self._pages: dict[str, VisualPage] = {}
+        self._vectors: dict[str, tuple[float, ...]] = {}
+
+    @property
+    def pages(self) -> tuple[VisualPage, ...]:
+        return tuple(self._pages.values())
+
+    def index_pages(self, pages: Iterable[PageLike]) -> list[VisualPage]:
+        """Embed each page's image and atomically replace entries for its doc.
+
+        Pages without an image are skipped, leaving the visual index to own
+        only pages that actually have slide images.
+        """
+
+        indexed = [_visual_page(page) for page in pages if page.image_path]
+        doc_ids = {page.doc_id for page in indexed}
+        vectors = (
+            self.embedder.embed_images([page.image_path for page in indexed])
+            if indexed
+            else []
+        )
+        if len(vectors) != len(indexed):
+            raise VisualEmbeddingServiceError(
+                "The visual-embedding service returned an unexpected vector count"
+            )
+        _validate_vector_dimensions(vectors)
+
+        # Do not discard an existing document until its replacement embeddings
+        # have been generated and validated successfully.
+        for doc_id in doc_ids:
+            self.delete_document(doc_id)
+        for page, vector in zip(indexed, vectors, strict=True):
+            page_id = _page_id(page.doc_id, page.page_number)
+            self._pages[page_id] = page
+            self._vectors[page_id] = vector
+        return indexed
+
+    def delete_document(self, doc_id: str) -> None:
+        """Delete every page vector for ``doc_id``; missing IDs are a no-op."""
+
+        remove_ids = {
+            page_id
+            for page_id, page in self._pages.items()
+            if page.doc_id == doc_id
+        }
+        for page_id in remove_ids:
+            self._pages.pop(page_id, None)
+            self._vectors.pop(page_id, None)
+
+    def search(self, query: str, *, top_k: int = 5) -> list[VisualHit]:
+        """Return page images ranked by cosine similarity to ``query``."""
+
+        if top_k <= 0:
+            raise ValueError("top_k must be greater than zero")
+        query = query.strip()
+        if not query or not self._pages:
+            return []
+
+        query_vector = self.embedder.embed_text(query)
+        _validate_vector_dimensions([query_vector, *self._vectors.values()])
+        scored = [
+            (_cosine_similarity(query_vector, self._vectors[page_id]), page)
+            for page_id, page in self._pages.items()
+        ]
+        scored.sort(key=lambda item: (-item[0], item[1].page_number))
+        return [
+            VisualHit.from_page(page, score=score)
+            for score, page in scored[:top_k]
+        ]
+
+
+def _visual_page(page: PageLike) -> VisualPage:
+    return VisualPage(
+        doc_id=page.doc_id,
+        doc_name=page.doc_name,
+        page_number=page.page_number,
+        image_path=page.image_path,
+        source_format=page.source_format,
+    )
+
+
+def _page_id(doc_id: str, page_number: int) -> str:
+    value = f"{doc_id}:{page_number}".encode("utf-8")
+    return hashlib.sha256(value).hexdigest()[:24]
+
+
+def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+    return sum(a * b for a, b in zip(left, right, strict=True)) / (
+        left_norm * right_norm
+    )

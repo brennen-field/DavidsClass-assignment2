@@ -29,3 +29,43 @@ class EvidenceItem:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class VisualPage:
+    """One stored page record in the visual index (one per page/slide image)."""
+
+    doc_id: str
+    doc_name: str
+    page_number: int
+    image_path: str
+    source_format: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class VisualHit:
+    """One visual-search candidate: a page ranked by query-image similarity."""
+
+    doc_id: str
+    doc_name: str
+    page_number: int
+    image_path: str
+    source_format: str
+    score: float
+
+    @classmethod
+    def from_page(cls, page: VisualPage, *, score: float) -> "VisualHit":
+        return cls(
+            doc_id=page.doc_id,
+            doc_name=page.doc_name,
+            page_number=page.page_number,
+            image_path=page.image_path,
+            source_format=page.source_format,
+            score=score,
+        )
+
+    def to_dict(self) -> dict:
+        return asdict(self)
