@@ -1,4 +1,24 @@
-"""Text search (owner: Nick).
+"""Source-preserving BM25 and semantic text retrieval (owner: Nick)."""
 
-Chunking with source details, keyword (BM25) search, text embeddings.
-"""
+from course_assistant.text_search.chunking import chunk_pages
+from course_assistant.text_search.embedding import (
+    EmbeddingServiceError,
+    SemanticIndex,
+    TextEmbeddingClient,
+)
+from course_assistant.text_search.integration import connect_document_store
+from course_assistant.text_search.keyword import KeywordIndex
+from course_assistant.text_search.models import SearchResult, TextChunk
+from course_assistant.text_search.persistent import ChromaSemanticIndex
+
+__all__ = [
+    "KeywordIndex",
+    "ChromaSemanticIndex",
+    "EmbeddingServiceError",
+    "SearchResult",
+    "SemanticIndex",
+    "TextChunk",
+    "TextEmbeddingClient",
+    "chunk_pages",
+    "connect_document_store",
+]
