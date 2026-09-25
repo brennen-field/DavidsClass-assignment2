@@ -1,0 +1,41 @@
+# Course Assistant
+
+MBAX 6418 Assignment 2. A Python app that answers questions about course
+materials and generates practice quizzes, using hybrid RAG (keyword search,
+text embeddings, and slide-image embeddings, combined and reranked) with the
+class services.
+
+> Work in progress. Sections below get filled in by each owner.
+
+## Setup
+
+Requires Python 3.12 and [LibreOffice](https://www.libreoffice.org/) (for PPTX upload).
+
+```bash
+git clone https://github.com/brennen-field/DavidsClass-assignment2.git
+cd DavidsClass-assignment2
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env             # then fill in real values; never commit .env
+python app.py
+```
+
+Run tests with `pytest`.
+
+## Project layout
+
+| Folder | Owner | Part |
+|---|---|---|
+| `course_assistant/documents/` | Chase | Upload, conversion, page text + images, duplicates, removal |
+| `course_assistant/text_search/` | Nick | Chunking, BM25, text embeddings |
+| `course_assistant/visual_search/` | Shrihari | Image embeddings, combining, reranking |
+| `course_assistant/answers/` | Preston | LLM answers with sources |
+| `course_assistant/quiz/` | Brennen | Quizzes; `app.py` shell |
+| `docs/` | Everyone | Handoff specs, diagram |
+
+## Team workflow
+
+- Work on your own branch (e.g. `chase/documents`), open a PR, get one review, then merge.
+- Never push to `main` directly. Never commit `.env` or keys.
+- Review rotation: Chase → Nick → Shrihari → Preston → Brennen → Chase.
