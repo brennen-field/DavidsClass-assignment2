@@ -21,6 +21,10 @@ cp .env.example .env             # then fill in real values; never commit .env
 python app.py
 ```
 
+The text-embedding client reads the class credential only from
+`CLASS_API_KEY` in the local `.env`. Keep the provided `TEXT_EMBED_URL` and
+`TEXT_EMBED_MODEL` values unchanged unless the instructor updates the service.
+
 Run tests with `pytest`.
 
 ## Project layout

@@ -15,6 +15,10 @@ CLASS_API_KEY = os.getenv("CLASS_API_KEY", "")
 
 LLM_URL = os.getenv("LLM_URL", "")
 TEXT_EMBED_URL = os.getenv("TEXT_EMBED_URL", "")
+TEXT_EMBED_MODEL = os.getenv(
+    "TEXT_EMBED_MODEL",
+    "nvidia/Nemotron-3-Embed-1B-BF16",
+)
 VISUAL_EMBED_URL = os.getenv("VISUAL_EMBED_URL", "")
 RERANK_URL = os.getenv("RERANK_URL", "")
 PARSE_URL = os.getenv("PARSE_URL", "")
