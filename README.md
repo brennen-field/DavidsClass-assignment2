@@ -30,6 +30,16 @@ Run tests with `pytest`.
 Pull requests also run the full mocked test suite through GitHub Actions; no
 class API key is provided to or required by CI.
 
+## Architecture
+
+![Course Assistant architecture](docs/architecture.svg)
+
+The left dashed region runs **locally** as the Python app; the right dashed
+region is the class services on **dobolyi.com**. Retrieval combines keyword
+(BM25), text-embedding, and page-image (visual) results, merges them by
+`chunk_id`, and reranks them (toggle via `use_reranker`) so answer generation
+gets the best text-and-image evidence.
+
 ## Project layout
 
 | Folder | Owner | Part |
