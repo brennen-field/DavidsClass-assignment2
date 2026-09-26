@@ -100,7 +100,9 @@ def test_client_returns_scores_sorted_descending_and_index_aligned():
 
 
 def test_client_sends_top_n_and_underscores_the_service():
-    http = RecordingHttpClient(FakeResponse(scores_response()))
+    http = RecordingHttpClient(
+        FakeResponse({"results": [{"index": 1, "relevance_score": 0.9}]})
+    )
     client = RerankerClient(
         base_url="http://dobolyi.com:9004",
         api_key="unit-test-placeholder",
@@ -172,3 +174,45 @@ def test_client_rejects_missing_configuration():
         RerankerClient(base_url="", api_key="k")
     with pytest.raises(ValueError, match="CLASS_API_KEY"):
         RerankerClient(base_url="http://dobolyi.com:9004", api_key="")
+
+
+def test_top_n_accepts_a_valid_subset_of_results():
+    # top_n=1 of 2 documents -> the service legitimately returns ONE result.
+    http = RecordingHttpClient(FakeResponse({"results": [{"index": 1, "relevance_score": 0.9}]}))
+    client = RerankerClient(
+        base_url="http://dobolyi.com:9004",
+        api_key="unit-test-placeholder",
+        http_client=http,
+    )
+
+    scores = client.rerank("q", [RerankItem(text="a"), RerankItem(text="b")], top_n=1)
+
+    assert scores == [RerankScore(index=1, relevance_score=0.9)]
+    assert http.calls[0][1]["json"]["top_n"] == 1
+
+
+def test_top_n_rejects_duplicate_indexes():
+    client = make_client(
+        FakeResponse(
+            {
+                "results": [
+                    {"index": 1, "relevance_score": 0.9},
+                    {"index": 1, "relevance_score": 0.8},
+                ]
+            }
+        )
+    )
+    with pytest.raises(RerankServiceError):
+        client.rerank("q", [RerankItem(text="a"), RerankItem(text="b")])
+
+
+def test_top_n_rejects_out_of_range_indexes():
+    client = make_client(FakeResponse({"results": [{"index": 5, "relevance_score": 0.9}]}))
+    with pytest.raises(RerankServiceError):
+        client.rerank("q", [RerankItem(text="a"), RerankItem(text="b")], top_n=1)
+
+
+def test_top_n_rejects_wrong_subset_size():
+    client = make_client(FakeResponse({"results": []}))
+    with pytest.raises(RerankServiceError):
+        client.rerank("q", [RerankItem(text="a"), RerankItem(text="b")], top_n=1)

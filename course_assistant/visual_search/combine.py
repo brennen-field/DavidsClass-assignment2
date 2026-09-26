@@ -14,6 +14,10 @@ from course_assistant.text_search.models import SearchResult
 from course_assistant.visual_search.models import EvidenceItem, VisualHit
 from course_assistant.visual_search.rerank import RerankItem, RerankerClient, RerankServiceError
 
+# Reciprocal-rank-fusion smoothing constant (standard default). Used only as a
+# cross-method tie-break, so it never compares raw scores across methods.
+RRF_K = 60
+
 
 @dataclass
 class _Candidate:
@@ -26,17 +30,32 @@ class _Candidate:
     chunk_id: str = ""
     methods: set[str] = field(default_factory=set)
     method_scores: dict[str, float] = field(default_factory=dict)
+    method_ranks: dict[str, int] = field(default_factory=dict)
 
     @property
     def best_score(self) -> float:
-        """Highest score a single retrieval method assigned this candidate."""
+        """Highest raw score a single method assigned this candidate (per-method)."""
         return max(self.method_scores.values()) if self.method_scores else 0.0
 
-    def add(self, method: str, score: float) -> None:
+    @property
+    def rrf_score(self) -> float:
+        """Reciprocal-rank-fusion score over the rank positions within methods.
+
+        Using rank (position) rather than raw score keeps different methods'
+        scores comparable: BM25 magnitudes and cosine similarities are not on
+        the same scale, so only positions are fused.
+        """
+        if not self.method_ranks:
+            return 0.0
+        return sum(1.0 / (RRF_K + rank) for rank in self.method_ranks.values())
+
+    def add(self, method: str, score: float, rank: int | None = None) -> None:
         self.methods.add(method)
         self.method_scores[method] = max(
             self.method_scores.get(method, float("-inf")), score
         )
+        if rank is not None:
+            self.method_ranks[method] = min(self.method_ranks.get(method, rank), rank)
 
     def to_evidence(self, rerank_score: float) -> EvidenceItem:
         return EvidenceItem(
@@ -71,28 +90,38 @@ def combine_and_rerank(
 
     When ``use_reranker`` is true and ``reranker`` is given, candidates are
     ordered by the class reranker's relevance score. Otherwise candidates fall
-    back to a deterministic order: most retrieval methods first, then best
-    per-method score (raw cross-method scores are otherwise not compared).
-    A reranking outage degrades to that same fallback order.
+    back to a deterministic order: most retrieval methods first, then a
+    **reciprocal-rank-fusion** tie-break (rank position within each method, never
+    raw cross-method scores), then document/page/chunk id. A reranking outage
+    degrades to that same fallback order. ``rerank_score`` reports the highest
+    raw per-method score for context, not the ordering key.
     """
 
     candidates: dict[str, _Candidate] = {}
-    for result in list(keyword_results) + list(text_embedding_results):
-        candidate = candidates.setdefault(
-            result.chunk_id,
-            _Candidate(
-                chunk_id=result.chunk_id,
-                doc_id=result.doc_id,
-                doc_name=result.doc_name,
-                page_number=result.page_number,
-                text=result.text,
-                image_path=result.image_path,
-                source_format=result.source_format,
-            ),
-        )
-        candidate.add(result.search_method, result.score)
+    for method, results in (
+        ("bm25", keyword_results),
+        ("text_embedding", text_embedding_results),
+    ):
+        for rank, result in enumerate(results, 1):
+            candidate = candidates.setdefault(
+                result.chunk_id,
+                _Candidate(
+                    chunk_id=result.chunk_id,
+                    doc_id=result.doc_id,
+                    doc_name=result.doc_name,
+                    page_number=result.page_number,
+                    text=result.text,
+                    image_path=result.image_path,
+                    source_format=result.source_format,
+                ),
+            )
+            candidate.add(method, result.score, rank)
 
-    # Deduplicate visual hits by page, keeping the strongest score.
+    # Deduplicate visual hits by page, keeping the strongest score, and retain
+    # the visual rank position for cross-method fusion.
+    visual_rank: dict[tuple[str, int], int] = {}
+    for rank, hit in enumerate(visual_results, 1):
+        visual_rank.setdefault((hit.doc_id, hit.page_number), rank)
     visual_by_page: dict[tuple[str, int], VisualHit] = {}
     for hit in visual_results:
         key = (hit.doc_id, hit.page_number)
@@ -108,7 +137,9 @@ def combine_and_rerank(
         ]
         if page_candidates:
             for candidate in page_candidates:
-                candidate.add("visual", hit.score)
+                candidate.add(
+                    "visual", hit.score, visual_rank.get((doc_id, page_number))
+                )
         else:
             image_only_candidate = image_only.setdefault(
                 (doc_id, page_number),
@@ -121,7 +152,9 @@ def combine_and_rerank(
                     source_format=hit.source_format,
                 ),
             )
-            image_only_candidate.add("visual", hit.score)
+            image_only_candidate.add(
+                "visual", hit.score, visual_rank.get((doc_id, page_number))
+            )
 
     final = list(candidates.values()) + list(image_only.values())
     if use_reranker and reranker is not None and final:
@@ -158,7 +191,7 @@ def _fallback_ordered(candidates: Sequence[_Candidate]) -> list[EvidenceItem]:
         candidates,
         key=lambda c: (
             -len(c.methods),
-            -c.best_score,
+            -c.rrf_score,
             c.doc_id,
             c.page_number,
             c.chunk_id,

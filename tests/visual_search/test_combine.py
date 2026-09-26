@@ -67,16 +67,32 @@ def test_fallback_ranks_more_methods_first_even_with_lower_score():
     assert [r.chunk_id for r in results] == ["cA", "cSolo"]
 
 
-def test_fallback_breaks_ties_with_best_per_method_score():
+def test_fallback_breaks_ties_by_method_rank_not_raw_score():
+    # cA is rank 1 in both methods; cB is rank 2 in both. cA must win the tie
+    # even though cB carries higher raw scores (scores differ across methods).
     results = combine_and_rerank(
         "q",
         [sr("cA", "bm25", 0.2, doc="a"), sr("cB", "bm25", 0.9, doc="b")],
-        [sr("cA", "text_embedding", 0.2), sr("cB", "text_embedding", 0.3)],
+        [sr("cA", "text_embedding", 0.3), sr("cB", "text_embedding", 0.95)],
         [],
         use_reranker=False,
     )
-    # Both found by two methods; cB has the higher best score -> first.
-    assert [r.chunk_id for r in results] == ["cB", "cA"]
+    assert [r.chunk_id for r in results] == ["cA", "cB"]
+
+
+def test_fallback_does_not_compare_raw_scores_across_methods():
+    # Both candidates are rank 1 within their own single method, but with very
+    # different raw scales (bm25 9.0 vs visual 0.5). Raw score must NOT decide;
+    # the fallback ties on reciprocal-rank fusion and breaks deterministically.
+    results = combine_and_rerank(
+        "q",
+        [sr("cK", "bm25", 9.0, doc="zzz")],
+        [],
+        [vh(page=1, score=0.5, doc="aaa")],
+        use_reranker=False,
+    )
+    # Equal method count and equal RRF -> deterministic tiebreak by doc_id.
+    assert [r.doc_id for r in results] == ["aaa", "zzz"]
 
 
 def test_visual_hit_attributes_visual_to_text_candidate_on_same_page():
@@ -99,8 +115,9 @@ def test_visual_hit_with_no_matching_page_becomes_image_only_evidence():
         [vh(page=7, score=0.9, image="meme")],
         use_reranker=False,
     )
-    image_item = results[0]  # image-only, found by one method, page 7
-    assert image_item.page_number == 7
+    # The visual hit has no matching text page, so it becomes its own
+    # image-only evidence item (regardless of fallback tie-break ordering).
+    image_item = next(item for item in results if item.page_number == 7)
     assert image_item.text == ""
     assert image_item.image_path.endswith("meme.png")
     assert image_item.retrieved_by == ("visual",)

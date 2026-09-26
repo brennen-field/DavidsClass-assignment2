@@ -78,10 +78,15 @@ class ChromaVisualIndex:
         )
 
     def index_pages(self, pages: Iterable[PageLike]) -> list[VisualPage]:
-        """Embed page images and persist them, replacing stale docs by ID."""
+        """Embed page images and persist them, replacing stale docs by ID.
 
-        indexed = [_visual_page(page) for page in pages if page.image_path]
-        doc_ids = {page.doc_id for page in indexed}
+        Document IDs are taken from the complete page list so a document that is
+        re-indexed to no usable images clears its previously persisted entries.
+        """
+
+        page_list = list(pages)
+        indexed = [_visual_page(page) for page in page_list if page.image_path]
+        doc_ids = {page.doc_id for page in page_list}
         vectors = (
             self.embedder.embed_images([page.image_path for page in indexed])
             if indexed

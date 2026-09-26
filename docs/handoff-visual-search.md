@@ -67,8 +67,11 @@ Reranking uses the class multimodal reranker (`9004`,
 `Qwen/Qwen3-VL-Reranker-2B`), which scores each candidate on text **and** its
 page image against the query. `use_reranker=True` (default) orders by rerank
 score; with reranking off (for the comparison run), the order is deterministic:
-most methods found, then best per-method score. A rerank-service outage degrades
-to that fallback order rather than failing retrieval.
+most methods found, then a **reciprocal-rank-fusion** tie-break (rank position
+within each method — never raw cross-method scores, since BM25 and cosine are
+not on the same scale), then document/page/chunk id. A rerank-service outage
+degrades to that fallback order rather than failing retrieval. `rerank_score`
+reports the best raw per-method score for context, not the ordering key.
 
 ## Configuration
 

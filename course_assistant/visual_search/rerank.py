@@ -126,6 +126,7 @@ class RerankerClient:
         if top_n is not None and top_n <= 0:
             raise ValueError("top_n must be greater than zero")
 
+        total = len(documents)
         payload: dict[str, object] = {
             "model": self.model,
             "query": {"content": [{"type": "text", "text": query_text}]},
@@ -150,7 +151,9 @@ class RerankerClient:
         except (requests.RequestException, ValueError) as error:
             raise RerankServiceError("The reranking service request failed") from error
 
-        return _parse_scores(data, expected_count=len(documents))
+        # With top_n the service returns only that many results (a subset).
+        expected = min(top_n, total) if top_n is not None else total
+        return _parse_scores(data, expected_count=expected, total_count=total)
 
 
 def _reranking_endpoint(base_url: str) -> str:
@@ -173,7 +176,7 @@ def _document_payload(item: RerankItem) -> dict[str, object]:
     return {"content": content}
 
 
-def _parse_scores(data: object, *, expected_count: int) -> list[RerankScore]:
+def _parse_scores(data: object, *, expected_count: int, total_count: int) -> list[RerankScore]:
     try:
         results = data["results"]  # type: ignore[index]
         raw = [
@@ -183,11 +186,15 @@ def _parse_scores(data: object, *, expected_count: int) -> list[RerankScore]:
     except (KeyError, TypeError, ValueError, OverflowError) as error:
         raise RerankServiceError("The reranking service returned an invalid response") from error
 
-    present = {index for index, _ in raw}
-    if present != set(range(expected_count)) or len(raw) != expected_count:
+    indices = [index for index, _ in raw]
+    if len(raw) != expected_count:
         raise RerankServiceError(
-            "The reranking service returned an unexpected set of scores"
+            "The reranking service returned an unexpected number of scores"
         )
+    if len(set(indices)) != len(indices):
+        raise RerankServiceError("The reranking service returned duplicate result indexes")
+    if any(index < 0 or index >= total_count for index in indices):
+        raise RerankServiceError("The reranking service returned an out-of-range result index")
     if any(not math.isfinite(score) for _, score in raw):
         raise RerankServiceError("The reranking service returned a non-finite score")
 

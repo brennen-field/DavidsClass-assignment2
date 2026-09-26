@@ -261,11 +261,14 @@ class VisualIndex:
         """Embed each page's image and atomically replace entries for its doc.
 
         Pages without an image are skipped, leaving the visual index to own
-        only pages that actually have slide images.
+        only pages that actually have slide images. Document IDs are taken from
+        the *complete* incoming page list, so re-indexing a document to no
+        usable images still clears its previously indexed entries.
         """
 
-        indexed = [_visual_page(page) for page in pages if page.image_path]
-        doc_ids = {page.doc_id for page in indexed}
+        page_list = list(pages)
+        indexed = [_visual_page(page) for page in page_list if page.image_path]
+        doc_ids = {page.doc_id for page in page_list}
         vectors = (
             self.embedder.embed_images([page.image_path for page in indexed])
             if indexed

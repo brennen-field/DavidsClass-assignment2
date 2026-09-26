@@ -123,6 +123,19 @@ def test_failed_reindex_keeps_existing_document_available(embedder):
     assert index.pages[0].page_number == 1
 
 
+def test_reindex_document_to_no_images_clears_in_memory_entries(embedder):
+    index = VisualIndex(embedder)
+    index.index_pages([page("decks", 1, "chart")])
+    assert len(index.pages) == 1
+
+    # Re-index the same document with only an image-less page: the old visual
+    # entries for the document must be removed, not left searchable.
+    index.index_pages([page("decks", 2, None)])
+
+    assert index.pages == ()
+    assert index.search("chart") == []
+
+
 def test_visual_index_requires_positive_top_k(embedder):
     index = VisualIndex(embedder)
     with pytest.raises(ValueError):
@@ -173,5 +186,19 @@ def test_chroma_index_delete_is_idempotent(embedder, tmp_path):
     index.index_pages(chart_diagram_pages())
     index.delete_document("decks")
     index.delete_document("decks")
+    assert index.search("chart") == []
+    index.close()
+
+
+def test_chroma_reindex_to_no_images_clears_previous_entries(embedder, tmp_path):
+    index = make_persistent_index(tmp_path, embedder)
+    index.index_pages([page("decks", 1, "chart")])
+    assert len(index.pages) == 1
+
+    # Re-index the same document with only an image-less page: the previously
+    # persisted visual entry must be removed, not left searchable.
+    index.index_pages([page("decks", 2, None)])
+
+    assert index.pages == ()
     assert index.search("chart") == []
     index.close()
