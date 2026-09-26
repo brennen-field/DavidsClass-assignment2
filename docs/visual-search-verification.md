@@ -48,6 +48,21 @@ So the *Vibe Coding on "Prod"* meme set is **slides 33 and 34**, not a single sl
 | "speculative decoding diagram" | 13 | #1 | #1 |
 | "quantization formats" (chart) | 16 | #1 | #1 |
 
+## Question & answer (diagram/chart) test
+
+Beyond recall, a full question-about-a-chart was answered end-to-end (retrieval +
+rerank, then an LLM grounded on the retrieved slide):
+
+- **Question:** "Per the chart of popular open coding models (August 2026), what
+  is the context window and parameter count of DeepSeek-V4-Flash-0731?"
+- **Retrieved:** slide 22 ("Popular Open Coding Models") ranked **#1**, with all
+  three signals (`bm25`, `text_embedding`, `visual`).
+- **Grounded answer (from slide 22 facts only):** *"DeepSeek-V4-Flash-0731 has
+  284B parameters and a 1M context window."* — correct per the chart.
+
+This validates the full path a diagram/chart question takes: correct slide
+retrieved as top evidence, and a correct answer produced from that evidence.
+
 ## Findings
 
 - **Acceptance met.** On natural phrasing the two real prod memes (33 & 34) rank
