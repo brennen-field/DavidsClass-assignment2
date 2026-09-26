@@ -63,6 +63,29 @@ rerank, then an LLM grounded on the retrieved slide):
 This validates the full path a diagram/chart question takes: correct slide
 retrieved as top evidence, and a correct answer produced from that evidence.
 
+## Comparison: reranking on vs. off (for Nick)
+
+**Flagged for Nick (owner of the design-comparison experiment).** Preliminary
+data from this run, target-slide rank with reranking **OFF** vs **ON**:
+
+| Query | Target slide | Rerank OFF | Rerank ON |
+|---|---|---|---|
+| meme: vibe coding on prod, how it started vs going, security | 33 & 34 | 34#1, 33#2 | 33#1, 34#2 |
+| what is the vibe coding security meme on production? | 33 & 34 | 33#1, 34#4 | 33#1, 34#8 |
+| KV caching architecture (diagram) | 11 | #1 | #1 |
+| speculative decoding diagram | 13 | #1 | #1 |
+| quantization formats (chart) | 16 | #1 | #1 |
+| chart Q&A: DeepSeek context/params | 22 | #1 | #1 (also used for the grounded answer) |
+
+**Read:** both modes put the correct diagram/chart slides at **#1**. For the meme,
+both modes keep at least one prod-meme slide at #1 and both prod memes in the
+top two on natural phrasing; reranking did **not** help (slightly hurt) the one
+exact-phrased meme query. Correctness/source-support is measured here as the
+target slide ranking #1 (the right evidence for an answer). **Timing was not
+captured** in this ad-hoc run — that belongs in Nick's full design-comparison
+experiment (same questions, same files), for which the `use_reranker` switch is
+ready.
+
 ## Findings
 
 - **Acceptance met.** On natural phrasing the two real prod memes (33 & 34) rank
